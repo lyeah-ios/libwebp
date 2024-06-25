@@ -76,7 +76,8 @@ static int SaveOutput(const WebPDecBuffer* const buffer,
 
 static void Help(void) {
   printf("Usage: dwebp in_file [options] [-o out_file]\n\n"
-         "Decodes the WebP image file to PNG format [Default]\n"
+         "Decodes the WebP image file to PNG format [Default].\n"
+         "Note: Animated WebP files are not supported.\n\n"
          "Use following options to convert into alternate image formats:\n"
          "  -pam ......... save the raw RGBA samples as a color PAM\n"
          "  -ppm ......... save the raw RGB samples as a color PPM\n"
@@ -95,7 +96,7 @@ static void Help(void) {
          "  -alpha_dither  use alpha-plane dithering if needed\n"
          "  -mt .......... use multi-threading\n"
          "  -crop <x> <y> <w> <h> ... crop output with the given rectangle\n"
-         "  -resize <w> <h> ......... scale the output (*after* any cropping)\n"
+         "  -resize <w> <h> ......... resize output (*after* any cropping)\n"
          "  -flip ........ flip the output vertically\n"
          "  -alpha ....... only save the alpha plane\n"
          "  -incremental . use incremental decoding (useful for tests)\n"
@@ -132,7 +133,7 @@ static uint8_t* AllocateExternalBuffer(WebPDecoderConfig* config,
                      format == RGB_565) ? 2
                   : 4;
     uint32_t stride = bpp * w + 7;   // <- just for exercising
-    external_buffer = (uint8_t*)malloc(stride * h);
+    external_buffer = (uint8_t*)WebPMalloc(stride * h);
     if (external_buffer == NULL) return NULL;
     output_buffer->u.RGBA.stride = stride;
     output_buffer->u.RGBA.size = stride * h;
@@ -145,7 +146,7 @@ static uint8_t* AllocateExternalBuffer(WebPDecoderConfig* config,
     uint32_t total_size = stride * h * (has_alpha ? 2 : 1)
                         + 2 * uv_stride * (h + 1) / 2;
     assert(format >= YUV && format <= YUVA);
-    external_buffer = (uint8_t*)malloc(total_size);
+    external_buffer = (uint8_t*)WebPMalloc(total_size);
     if (external_buffer == NULL) return NULL;
     tmp = external_buffer;
     output_buffer->u.YUVA.y = tmp;
@@ -176,6 +177,7 @@ static uint8_t* AllocateExternalBuffer(WebPDecoderConfig* config,
   return external_buffer;
 }
 
+// Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
 int main(int argc, const char* argv[]) {
   int ok = 0;
   const char* in_file = NULL;
@@ -196,14 +198,14 @@ int main(int argc, const char* argv[]) {
 
   if (!WebPInitDecoderConfig(&config)) {
     fprintf(stderr, "Library version mismatch!\n");
-    FREE_WARGV_AND_RETURN(-1);
+    FREE_WARGV_AND_RETURN(EXIT_FAILURE);
   }
 
   for (c = 1; c < argc; ++c) {
     int parse_error = 0;
     if (!strcmp(argv[c], "-h") || !strcmp(argv[c], "-help")) {
       Help();
-      FREE_WARGV_AND_RETURN(0);
+      FREE_WARGV_AND_RETURN(EXIT_SUCCESS);
     } else if (!strcmp(argv[c], "-o") && c < argc - 1) {
       out_file = (const char*)GET_WARGV(argv, ++c);
     } else if (!strcmp(argv[c], "-alpha")) {
@@ -226,7 +228,7 @@ int main(int argc, const char* argv[]) {
       const int version = WebPGetDecoderVersion();
       printf("%d.%d.%d\n",
              (version >> 16) & 0xff, (version >> 8) & 0xff, version & 0xff);
-      FREE_WARGV_AND_RETURN(0);
+      FREE_WARGV_AND_RETURN(EXIT_SUCCESS);
     } else if (!strcmp(argv[c], "-pgm")) {
       format = PGM;
     } else if (!strcmp(argv[c], "-yuv")) {
@@ -292,21 +294,21 @@ int main(int argc, const char* argv[]) {
     } else if (argv[c][0] == '-') {
       fprintf(stderr, "Unknown option '%s'\n", argv[c]);
       Help();
-      FREE_WARGV_AND_RETURN(-1);
+      FREE_WARGV_AND_RETURN(EXIT_FAILURE);
     } else {
       in_file = (const char*)GET_WARGV(argv, c);
     }
 
     if (parse_error) {
       Help();
-      FREE_WARGV_AND_RETURN(-1);
+      FREE_WARGV_AND_RETURN(EXIT_FAILURE);
     }
   }
 
   if (in_file == NULL) {
     fprintf(stderr, "missing input file!!\n");
     Help();
-    FREE_WARGV_AND_RETURN(-1);
+    FREE_WARGV_AND_RETURN(EXIT_FAILURE);
   }
 
   if (quiet) verbose = 0;
@@ -315,7 +317,7 @@ int main(int argc, const char* argv[]) {
     VP8StatusCode status = VP8_STATUS_OK;
     size_t data_size = 0;
     if (!LoadWebP(in_file, &data, &data_size, bitstream)) {
-      FREE_WARGV_AND_RETURN(-1);
+      FREE_WARGV_AND_RETURN(EXIT_FAILURE);
     }
 
     switch (format) {
@@ -412,9 +414,9 @@ int main(int argc, const char* argv[]) {
   }
  Exit:
   WebPFreeDecBuffer(output_buffer);
-  free((void*)external_buffer);
-  free((void*)data);
-  FREE_WARGV_AND_RETURN(ok ? 0 : -1);
+  WebPFree((void*)external_buffer);
+  WebPFree((void*)data);
+  FREE_WARGV_AND_RETURN(ok ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
 //------------------------------------------------------------------------------

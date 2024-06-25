@@ -60,7 +60,7 @@
 } while (0)
 
 // Loads 17 pixels each from rows r1 and r2 and generates 32 pixels.
-#define UPSAMPLE_32PIXELS(r1, r2, out) {                                       \
+#define UPSAMPLE_32PIXELS(r1, r2, out) do {                                    \
   const __m128i one = _mm_set1_epi8(1);                                        \
   const __m128i a = _mm_loadu_si128((const __m128i*)&(r1)[0]);                 \
   const __m128i b = _mm_loadu_si128((const __m128i*)&(r1)[1]);                 \
@@ -87,7 +87,7 @@
   /* pack the alternate pixels */                                              \
   PACK_AND_STORE(a, b, diag1, diag2, (out) +      0);  /* store top */         \
   PACK_AND_STORE(c, d, diag2, diag1, (out) + 2 * 32);  /* store bottom */      \
-}
+} while (0)
 
 // Turn the macro into a function for reducing code-size when non-critical
 static void Upsample32Pixels_SSE41(const uint8_t r1[], const uint8_t r2[],
@@ -123,7 +123,7 @@ static void FUNC_NAME(const uint8_t* top_y, const uint8_t* bottom_y,           \
   int uv_pos, pos;                                                             \
   /* 16byte-aligned array to cache reconstructed u and v */                    \
   uint8_t uv_buf[14 * 32 + 15] = { 0 };                                        \
-  uint8_t* const r_u = (uint8_t*)((uintptr_t)(uv_buf + 15) & ~15);             \
+  uint8_t* const r_u = (uint8_t*)((uintptr_t)(uv_buf + 15) & ~(uintptr_t)15);  \
   uint8_t* const r_v = r_u + 32;                                               \
                                                                                \
   assert(top_y != NULL);                                                       \
@@ -217,8 +217,8 @@ static void FUNC_NAME(const uint8_t* y, const uint8_t* u, const uint8_t* v,    \
 }
 
 #if !defined(WEBP_REDUCE_CSP)
-YUV444_FUNC(Yuv444ToRgb_SSE41, VP8YuvToRgb32_SSE41, WebPYuv444ToRgb_C, 3);
-YUV444_FUNC(Yuv444ToBgr_SSE41, VP8YuvToBgr32_SSE41, WebPYuv444ToBgr_C, 3);
+YUV444_FUNC(Yuv444ToRgb_SSE41, VP8YuvToRgb32_SSE41, WebPYuv444ToRgb_C, 3)
+YUV444_FUNC(Yuv444ToBgr_SSE41, VP8YuvToBgr32_SSE41, WebPYuv444ToBgr_C, 3)
 #endif  // WEBP_REDUCE_CSP
 
 WEBP_TSAN_IGNORE_FUNCTION void WebPInitYUV444ConvertersSSE41(void) {

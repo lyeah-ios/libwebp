@@ -206,8 +206,12 @@ struct my_error_mgr {
 
 static void my_error_exit(j_common_ptr dinfo) {
   struct my_error_mgr* myerr = (struct my_error_mgr*)dinfo->err;
+  const int msg_code = myerr->pub.msg_code;
   fprintf(stderr, "libjpeg error: ");
   dinfo->err->output_message(dinfo);
+  if (msg_code == JERR_INPUT_EOF || msg_code == JERR_FILE_READ) {
+    fprintf(stderr, "`jpegtran -copy all` MAY be able to process this file.\n");
+  }
   longjmp(myerr->setjmp_buffer, 1);
 }
 
@@ -274,7 +278,7 @@ int ReadJPEG(const uint8_t* const data, size_t data_size,
   ctx.data = data;
   ctx.data_size = data_size;
 
-  memset((j_decompress_ptr)&dinfo, 0, sizeof(dinfo));   // for setjmp sanity
+  memset((j_decompress_ptr)&dinfo, 0, sizeof(dinfo));   // for setjmp safety
   dinfo.err = jpeg_std_error(&jerr.pub);
   jerr.pub.error_exit = my_error_exit;
 
@@ -336,7 +340,11 @@ int ReadJPEG(const uint8_t* const data, size_t data_size,
   pic->width = width;
   pic->height = height;
   ok = WebPPictureImportRGB(pic, rgb, (int)stride);
-  if (!ok) goto Error;
+  if (!ok) {
+    pic->width = 0;   // WebPPictureImportRGB() barely touches 'pic' on failure.
+    pic->height = 0;  // Just reset dimensions but keep any 'custom_ptr' etc.
+    MetadataFree(metadata);  // In case the caller forgets to free it on error.
+  }
 
  End:
   free(rgb);
